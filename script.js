@@ -27,11 +27,24 @@ const meals = {
   5: ["김치볶음밥", "어묵국", "만두튀김", "단무지", "과일"],
 };
 
-const subjects = {
+const defaultSubjectsByGrade = {
   1: ["국어", "수학", "영어", "과학", "사회", "체육"],
   2: ["수학", "영어", "역사", "국어", "기술가정", "미술"],
   3: ["영어", "과학", "수학", "국어", "사회", "음악"],
 };
+
+// Timetables are stored per "grade-class" key, e.g. "1-1". This allows editing per class
+let timetables = JSON.parse(localStorage.getItem("atlas-timetables") || "null");
+if (!timetables) {
+  timetables = {};
+  // initialize default for grades 1-3 and classes 1-4
+  for (let g = 1; g <= 3; g += 1) {
+    for (let c = 1; c <= 4; c += 1) {
+      timetables[`${g}-${c}`] = defaultSubjectsByGrade[g].slice();
+    }
+  }
+  localStorage.setItem("atlas-timetables", JSON.stringify(timetables));
+}
 
 const calendarGrid = document.querySelector("#calendarGrid");
 const monthLabel = document.querySelector("#monthLabel");
@@ -45,6 +58,7 @@ const gradeSelect = document.querySelector("#gradeSelect");
 const classSelect = document.querySelector("#classSelect");
 const searchInput = document.querySelector("#searchInput");
 const reminderList = document.querySelector("#reminderList");
+const editTimetableButton = document.querySelector("#editTimetable");
 
 let currentDate = new Date(2026, 6, 1);
 let selectedDate = new Date(2026, 6, 1);
@@ -126,7 +140,11 @@ function renderDetails() {
   const grade = gradeSelect.value;
   const klass = classSelect.value;
   classLabel.textContent = `${grade}학년 ${klass}반`;
-  timetableList.innerHTML = subjects[grade]
+
+  // use timetables per grade-class key
+  const ttKey = `${grade}-${klass}`;
+  const timetable = timetables[ttKey] || defaultSubjectsByGrade[grade];
+  timetableList.innerHTML = timetable
     .map((subject, index) => `<li><b>${index + 1}교시</b><span>${subject}</span></li>`)
     .join("");
 
@@ -147,6 +165,111 @@ function renderReminders() {
 
 function saveReminders() {
   localStorage.setItem("atlas-reminders", JSON.stringify(reminders));
+}
+
+function saveTimetables() {
+  localStorage.setItem("atlas-timetables", JSON.stringify(timetables));
+}
+
+function openTimetableEditor() {
+  const grade = gradeSelect.value;
+  const klass = classSelect.value;
+  const key = `${grade}-${klass}`;
+  const current = timetables[key] ? timetables[key].slice() : defaultSubjectsByGrade[grade].slice();
+
+  // build editor UI inside timetableList
+  timetableList.innerHTML = "";
+
+  const editorForm = document.createElement("div");
+  editorForm.style.display = "grid";
+  editorForm.style.gap = "8px";
+
+  // scope select (this class / same grade all classes / all classes)
+  const scopeWrap = document.createElement("div");
+  scopeWrap.style.display = "flex";
+  scopeWrap.style.gap = "8px";
+  scopeWrap.style.alignItems = "center";
+  scopeWrap.innerHTML = `
+    <label style=\"font-weight:800;color:#647083;\">적용 범위:</label>
+  `;
+  const scopeSelect = document.createElement("select");
+  scopeSelect.innerHTML = `
+    <option value="this">현재 반만</option>
+    <option value="grade">같은 학년 전체</option>
+    <option value="all">모든 반</option>
+  `;
+  scopeWrap.appendChild(scopeSelect);
+  editorForm.appendChild(scopeWrap);
+
+  // inputs for periods
+  current.forEach((subj, idx) => {
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "8px";
+
+    const label = document.createElement("b");
+    label.textContent = `${idx + 1}교시`;
+    label.style.minWidth = "56px";
+    const input = document.createElement("input");
+    input.value = subj;
+    input.style.flex = "1";
+    input.dataset.period = idx;
+
+    row.appendChild(label);
+    row.appendChild(input);
+    editorForm.appendChild(row);
+  });
+
+  // action buttons
+  const actions = document.createElement("div");
+  actions.style.display = "flex";
+  actions.style.gap = "8px";
+
+  const saveBtn = document.createElement("button");
+  saveBtn.textContent = "저장";
+  saveBtn.className = "primary-button";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "취소";
+  cancelBtn.className = "text-button";
+
+  actions.appendChild(saveBtn);
+  actions.appendChild(cancelBtn);
+  editorForm.appendChild(actions);
+
+  timetableList.appendChild(editorForm);
+
+  cancelBtn.addEventListener("click", () => {
+    renderDetails();
+  });
+
+  saveBtn.addEventListener("click", () => {
+    // collect values
+    const inputs = editorForm.querySelectorAll('input[data-period]');
+    const newSubjects = Array.from(inputs).map((inp) => inp.value || "");
+    const scope = scopeSelect.value;
+
+    if (scope === "this") {
+      timetables[key] = newSubjects;
+    } else if (scope === "grade") {
+      // apply to all classes in same grade
+      const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
+      classOptions.forEach((c) => {
+        timetables[`${grade}-${c}`] = newSubjects.slice();
+      });
+    } else if (scope === "all") {
+      // apply to every grade & class
+      for (let g = 1; g <= 3; g += 1) {
+        const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
+        classOptions.forEach((c) => {
+          timetables[`${g}-${c}`] = newSubjects.slice();
+        });
+      }
+    }
+
+    saveTimetables();
+    renderDetails();
+  });
 }
 
 function render() {
@@ -184,5 +307,6 @@ document.querySelector("#clearReminders").addEventListener("click", () => {
 gradeSelect.addEventListener("change", renderDetails);
 classSelect.addEventListener("change", renderDetails);
 searchInput.addEventListener("input", renderCalendar);
+editTimetableButton.addEventListener("click", openTimetableEditor);
 
 render();
