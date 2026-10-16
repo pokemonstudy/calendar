@@ -33,14 +33,19 @@ const defaultSubjectsByGrade = {
   3: ["영어", "과학", "수학", "국어", "사회", "음악"],
 };
 
-// Timetables are stored per "grade-class" key, e.g. "1-1". This allows editing per class
+// Timetables are stored per "grade-class" key, and per weekday (0=일, 1=월 ... 6=토)
 let timetables = JSON.parse(localStorage.getItem("atlas-timetables") || "null");
 if (!timetables) {
   timetables = {};
-  // initialize default for grades 1-3 and classes 1-4
+  // initialize default for grades 1-3 and classes 1-4, weekdays 0-6
   for (let g = 1; g <= 3; g += 1) {
     for (let c = 1; c <= 4; c += 1) {
-      timetables[`${g}-${c}`] = defaultSubjectsByGrade[g].slice();
+      const key = `${g}-${c}`;
+      timetables[key] = {};
+      for (let d = 0; d <= 6; d += 1) {
+        // default: same subjects for all weekdays (you can change weekend defaults later)
+        timetables[key][d] = defaultSubjectsByGrade[g].slice();
+      }
     }
   }
   localStorage.setItem("atlas-timetables", JSON.stringify(timetables));
@@ -141,9 +146,10 @@ function renderDetails() {
   const klass = classSelect.value;
   classLabel.textContent = `${grade}학년 ${klass}반`;
 
-  // use timetables per grade-class key
+  // select timetable based on weekday
+  const weekday = selectedDate.getDay(); // 0..6
   const ttKey = `${grade}-${klass}`;
-  const timetable = timetables[ttKey] || defaultSubjectsByGrade[grade];
+  const timetable = (timetables[ttKey] && timetables[ttKey][weekday]) || defaultSubjectsByGrade[grade] || [];
   timetableList.innerHTML = timetable
     .map((subject, index) => `<li><b>${index + 1}교시</b><span>${subject}</span></li>`)
     .join("");
@@ -175,7 +181,14 @@ function openTimetableEditor() {
   const grade = gradeSelect.value;
   const klass = classSelect.value;
   const key = `${grade}-${klass}`;
-  const current = timetables[key] ? timetables[key].slice() : defaultSubjectsByGrade[grade].slice();
+
+  // default weekday is the currently selected date's weekday
+  const defaultWeekday = selectedDate.getDay();
+
+  // get current subjects for that weekday (or default)
+  const currentWeekSubjects = (timetables[key] && timetables[key][defaultWeekday])
+    ? timetables[key][defaultWeekday].slice()
+    : defaultSubjectsByGrade[grade].slice();
 
   // build editor UI inside timetableList
   timetableList.innerHTML = "";
@@ -183,6 +196,46 @@ function openTimetableEditor() {
   const editorForm = document.createElement("div");
   editorForm.style.display = "grid";
   editorForm.style.gap = "8px";
+
+  // weekday selector
+  const weekdayWrap = document.createElement("div");
+  weekdayWrap.style.display = "flex";
+  weekdayWrap.style.gap = "8px";
+  weekdayWrap.style.alignItems = "center";
+  weekdayWrap.innerHTML = `<label style=\"font-weight:800;color:#647083;\">요일:</label>`;
+  const weekdaySelect = document.createElement("select");
+  const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+  for (let d = 0; d <= 6; d += 1) {
+    const opt = document.createElement("option");
+    opt.value = String(d);
+    opt.textContent = dayNames[d];
+    if (d === defaultWeekday) opt.selected = true;
+    weekdaySelect.appendChild(opt);
+  }
+  weekdayWrap.appendChild(weekdaySelect);
+
+  // checkbox: apply to all weekdays
+  const applyAllWrap = document.createElement("label");
+  applyAllWrap.style.display = "inline-flex";
+  applyAllWrap.style.alignItems = "center";
+  applyAllWrap.style.gap = "8px";
+  const applyAllCheckbox = document.createElement("input");
+  applyAllCheckbox.type = "checkbox";
+  applyAllCheckbox.id = "applyAllWeekdays";
+  applyAllWrap.appendChild(applyAllCheckbox);
+  const applyAllText = document.createElement("span");
+  applyAllText.textContent = "모든 요일에 적용";
+  applyAllText.style.color = "#647083";
+  applyAllText.style.fontWeight = "800";
+  applyAllWrap.appendChild(applyAllText);
+
+  const topRow = document.createElement("div");
+  topRow.style.display = "flex";
+  topRow.style.gap = "12px";
+  topRow.style.alignItems = "center";
+  topRow.appendChild(weekdayWrap);
+  topRow.appendChild(applyAllWrap);
+  editorForm.appendChild(topRow);
 
   // scope select (this class / same grade all classes / all classes)
   const scopeWrap = document.createElement("div");
@@ -201,24 +254,33 @@ function openTimetableEditor() {
   scopeWrap.appendChild(scopeSelect);
   editorForm.appendChild(scopeWrap);
 
-  // inputs for periods
-  current.forEach((subj, idx) => {
-    const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.gap = "8px";
+  // inputs for periods (initially for the selected weekday)
+  const periodContainer = document.createElement("div");
+  periodContainer.style.display = "grid";
+  periodContainer.style.gap = "8px";
+  function buildPeriodInputs(subjectsArray) {
+    periodContainer.innerHTML = "";
+    subjectsArray.forEach((subj, idx) => {
+      const row = document.createElement("div");
+      row.style.display = "flex";
+      row.style.gap = "8px";
 
-    const label = document.createElement("b");
-    label.textContent = `${idx + 1}교시`;
-    label.style.minWidth = "56px";
-    const input = document.createElement("input");
-    input.value = subj;
-    input.style.flex = "1";
-    input.dataset.period = idx;
+      const label = document.createElement("b");
+      label.textContent = `${idx + 1}교시`;
+      label.style.minWidth = "56px";
+      const input = document.createElement("input");
+      input.value = subj;
+      input.style.flex = "1";
+      input.dataset.period = idx;
 
-    row.appendChild(label);
-    row.appendChild(input);
-    editorForm.appendChild(row);
-  });
+      row.appendChild(label);
+      row.appendChild(input);
+      periodContainer.appendChild(row);
+    });
+  }
+
+  buildPeriodInputs(currentWeekSubjects);
+  editorForm.appendChild(periodContainer);
 
   // action buttons
   const actions = document.createElement("div");
@@ -239,31 +301,46 @@ function openTimetableEditor() {
 
   timetableList.appendChild(editorForm);
 
+  // when weekday selection changes, load that weekday's subjects into inputs
+  weekdaySelect.addEventListener("change", () => {
+    const wd = Number(weekdaySelect.value);
+    const subs = (timetables[key] && timetables[key][wd]) ? timetables[key][wd].slice() : defaultSubjectsByGrade[grade].slice();
+    buildPeriodInputs(subs);
+  });
+
   cancelBtn.addEventListener("click", () => {
     renderDetails();
   });
 
   saveBtn.addEventListener("click", () => {
     // collect values
-    const inputs = editorForm.querySelectorAll('input[data-period]');
-    const newSubjects = Array.from(inputs).map((inp) => inp.value || "");
+    const inputs = periodContainer.querySelectorAll('input[data-period]');
+    const newSubjects = Array.from(inputs).map((inp) => (inp.value || "").trim());
     const scope = scopeSelect.value;
+    const applyAll = applyAllCheckbox.checked;
+    const chosenWeekday = Number(weekdaySelect.value);
+
+    function applyToKey(g, c) {
+      const target = `${g}-${c}`;
+      if (!timetables[target]) timetables[target] = {};
+      if (applyAll) {
+        for (let d = 0; d <= 6; d += 1) {
+          timetables[target][d] = newSubjects.slice();
+        }
+      } else {
+        timetables[target][chosenWeekday] = newSubjects.slice();
+      }
+    }
 
     if (scope === "this") {
-      timetables[key] = newSubjects;
+      applyToKey(grade, klass);
     } else if (scope === "grade") {
-      // apply to all classes in same grade
       const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
-      classOptions.forEach((c) => {
-        timetables[`${grade}-${c}`] = newSubjects.slice();
-      });
+      classOptions.forEach((c) => applyToKey(grade, c));
     } else if (scope === "all") {
-      // apply to every grade & class
+      const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
       for (let g = 1; g <= 3; g += 1) {
-        const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
-        classOptions.forEach((c) => {
-          timetables[`${g}-${c}`] = newSubjects.slice();
-        });
+        classOptions.forEach((c) => applyToKey(g, c));
       }
     }
 
