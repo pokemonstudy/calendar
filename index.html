@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>아틀라스 동아리 일정 캘린더</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="topbar" aria-label="상단 도구">
+        <div>
+          <p class="eyebrow">ATLAS SCHOOL PLANNER</p>
+          <h1>학교 행사 일정 캘린더</h1>
+        </div>
+        <div class="top-actions">
+          <button class="icon-button" id="prevMonth" aria-label="이전 달" title="이전 달">&lt;</button>
+          <div class="month-label" id="monthLabel"></div>
+          <button class="icon-button" id="nextMonth" aria-label="다음 달" title="다음 달">&gt;</button>
+        </div>
+      </section>
+
+      <section class="control-strip" aria-label="검색과 필터">
+        <label class="search-box">
+          <span aria-hidden="true">⌕</span>
+          <input id="searchInput" type="search" placeholder="날짜, 행사, 급식 검색" />
+        </label>
+        <label>
+          <span>학년</span>
+          <select id="gradeSelect">
+            <option value="1">1학년</option>
+            <option value="2">2학년</option>
+            <option value="3">3학년</option>
+          </select>
+        </label>
+        <label>
+          <span>반</span>
+          <select id="classSelect">
+            <option value="1">1반</option>
+            <option value="2">2반</option>
+            <option value="3">3반</option>
+            <option value="4">4반</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="layout">
+        <div class="calendar-panel" aria-label="월간 일정">
+          <div class="weekdays">
+            <span>일</span>
+            <span>월</span>
+            <span>화</span>
+            <span>수</span>
+            <span>목</span>
+            <span>금</span>
+            <span>토</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+
+        <aside class="detail-panel" aria-label="선택한 날짜 정보">
+          <div class="date-card">
+            <p class="panel-kicker">선택한 날짜</p>
+            <h2 id="selectedDateLabel"></h2>
+            <div id="eventList" class="event-list"></div>
+            <button id="reminderButton" class="primary-button">알림 설정</button>
+          </div>
+
+          <div class="info-section">
+            <div class="section-heading">
+              <h3>시간표</h3>
+              <span id="classLabel"></span>
+            </div>
+            <ol id="timetableList" class="timetable"></ol>
+          </div>
+
+          <div class="info-section">
+            <div class="section-heading">
+              <h3>급식</h3>
+              <span id="mealTag"></span>
+            </div>
+            <ul id="mealList" class="meal-list"></ul>
+          </div>
+
+          <div class="info-section">
+            <div class="section-heading">
+              <h3>알림</h3>
+              <button id="clearReminders" class="text-button">전체 삭제</button>
+            </div>
+            <ul id="reminderList" class="reminder-list"></ul>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
