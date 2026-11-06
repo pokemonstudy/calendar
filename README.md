@@ -1,34 +1,19 @@
 # 학교 생활 캘린더
 
-## 고성고등학교 급식 연동
+## 날짜와 고성고등학교 급식
 
-급식은 NEIS(나이스) 학교급식식단정보 API에서 가져옵니다. 웹 화면은 기존 HTML/CSS/JavaScript를 그대로 사용하고, Cloudflare Worker가 API 키를 숨긴 채 NEIS와 통신합니다. 교육청 코드는 강원도 `K10`이며, 학교 코드는 `schoolInfo` API에서 `고성고등학교`로 조회합니다.
+달력은 페이지를 여는 기기의 현재 날짜로 이동합니다. 기존에 들어 있던 일정과 요일별 메뉴는 예시 데이터이므로 실제 학교 일정이나 급식표로 간주하면 안 됩니다.
 
-### 1. NEIS API 키 발급
+급식 데이터는 NEIS(나이스) 학교급식식단정보 API를 사용합니다. 화면은 HTML/CSS/JavaScript이며, Cloudflare Worker가 인증키를 보관하고 NEIS에 요청합니다. Worker는 강원도 교육청 코드 `K10`을 사용해 학교정보 API에서 `고성고등학교`의 학교 코드를 찾고 해당 월의 메뉴를 반환하도록 되어 있습니다.
 
-NEIS 교육정보 개방 포털에서 학교급식식단정보 API 사용 신청을 하고 인증키를 발급받습니다. 키를 저장소에 커밋하거나 `meal-api-config.js`에 넣지 마세요.
+### 설정 및 배포
 
-### 2. Worker 배포 및 키 등록
+1. NEIS 교육정보 개방 포털에서 급식식단정보 API 인증키를 발급받습니다.
+2. Cloudflare Worker에 저장소의 `worker.js`를 배포합니다.
+3. Worker 설정의 **Variables and Secrets**에 `NEIS_API_KEY`를 Secret으로 추가합니다. 키를 저장소나 웹페이지 코드에 기록하지 마세요.
+4. `meal-api-config.js`의 빈 주소를 Worker URL로 변경합니다. 예: `window.MEAL_API_URL = "https://your-worker.workers.dev";`
+5. 저장소를 GitHub Pages에 배포합니다. 사이트는 현재 날짜로 열리고 해당 월의 급식을 Worker를 통해 불러옵니다.
 
-1. Cloudflare 계정에서 Worker를 만들고 이 저장소의 `worker.js`를 배포합니다.
-2. Worker의 **Settings → Variables and Secrets**에서 `NEIS_API_KEY`라는 이름의 **Secret**을 만들고 발급받은 키를 입력합니다.
-3. Worker URL(예: `https://goseong-meals.<계정>.workers.dev`)을 확인합니다.
+브라우저의 `meal-integration.js`는 Worker에 `GET /meals?month=YYYY-MM` 요청을 보내고, 결과를 월별로 `localStorage`에 캐시합니다. 달력의 급식 표시와 선택일 메뉴는 API 응답으로 갱신됩니다. 날짜별 학교 행사 일정은 여전히 별도 데이터이므로 학교의 실제 학사일정으로 교체해야 합니다.
 
-### 3. 웹 페이지에 Worker 주소 설정
-
-`meal-api-config.js`에서 빈 주소를 배포한 Worker URL로 변경합니다.
-
-```js
-window.MEAL_API_URL = "https://goseong-meals.<계정>.workers.dev";
-```
-
-그 후 변경사항을 GitHub Pages에 배포합니다. 이 주소는 비밀이 아니며, NEIS 키는 Worker Secret에만 보관됩니다.
-
-### 동작 방식
-
-1. 브라우저의 `meal-integration.js`가 현재 달을 확인해 Worker의 `/meals?month=YYYY-MM`에 요청합니다.
-2. Worker는 NEIS 학교정보 API로 강원도 고성고등학교의 학교 코드를 확인한 뒤, 해당 월의 급식식단정보를 조회합니다.
-3. 메뉴를 날짜별 JSON으로 반환하고, 브라우저는 달력의 급식 표시와 선택일 메뉴를 갱신합니다.
-4. 월별 응답은 브라우저 `localStorage`에 캐시되어 재방문 시 빠르게 표시됩니다.
-
-Worker는 매월 최대 100개 급식 레코드를 요청합니다. 메뉴가 비어 있는 날에는 달력에 급식 칩을 표시하지 않습니다. API 키의 발급 조건/쿼터는 NEIS 포털 정책을 따릅니다.
+현재 코드는 Worker와 API 키 없이는 실제 급식을 가져올 수 없습니다. 배포 후 Worker URL과 NEIS 키 설정을 완료해야 연동이 동작합니다.
