@@ -213,6 +213,11 @@ select {
   outline-offset: -3px;
 }
 
+.day-cell.selected {
+  border: 2px solid var(--accent-dark);
+  outline-color: var(--accent-dark);
+}
+
 .day-cell.other-month {
   background: #f6f8fa;
   color: #9aa4b0;
