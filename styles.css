@@ -214,8 +214,8 @@ select {
 }
 
 .day-cell.selected {
-  border: 2px solid var(--accent-dark);
-  outline-color: var(--accent-dark);
+  border: 3px solid var(--accent-dark);
+  outline: 3px solid var(--accent-dark);
 }
 
 .day-cell.other-month {
