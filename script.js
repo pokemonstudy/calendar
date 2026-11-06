@@ -14,7 +14,7 @@ const events = {
   "2026-09-18": [{ type: "event", title: "학교 축제", note: "공연 및 부스 운영" }],
   "2026-10-09": [{ type: "event", title: "한글날", note: "공휴일" }],
   "2026-10-23": [{ type: "event", title: "체육대회", note: "학급별 경기 일정 확인" }],
-  "2026-11-11": [{ type: "exam", title: "2학기 수행평가 마감", note: "제출 과제 점검" }],
+  "2026-11-11": [{ type: "exam', title: "2학기 수행평가 마감", note: "제출 과제 점검" }],
   "2026-12-14": [{ type: "exam", title: "2학기 기말고사", note: "전 학년 시험" }],
   "2026-12-31": [{ type: "event", title: "겨울방학식", note: "생활기록부 확인" }],
 };
@@ -50,6 +50,9 @@ if (!timetables) {
   }
   localStorage.setItem("atlas-timetables", JSON.stringify(timetables));
 }
+
+// Date-specific timetable overrides take precedence over the recurring weekday timetable.
+let dateTimetables = JSON.parse(localStorage.getItem("atlas-date-timetables") || "{}");
 
 const calendarGrid = document.querySelector("#calendarGrid");
 const monthLabel = document.querySelector("#monthLabel");
@@ -146,10 +149,14 @@ function renderDetails() {
   const klass = classSelect.value;
   classLabel.textContent = `${grade}학년 ${klass}반`;
 
-  // select timetable based on weekday
+  // A one-day override wins over the recurring timetable for this weekday.
   const weekday = selectedDate.getDay(); // 0..6
   const ttKey = `${grade}-${klass}`;
-  const timetable = (timetables[ttKey] && timetables[ttKey][weekday]) || defaultSubjectsByGrade[grade] || [];
+  const dateTimetableKey = `${key}-${ttKey}`;
+  const timetable = dateTimetables[dateTimetableKey]
+    || (timetables[ttKey] && timetables[ttKey][weekday])
+    || defaultSubjectsByGrade[grade]
+    || [];
   timetableList.innerHTML = timetable
     .map((subject, index) => `<li><b>${index + 1}교시</b><span>${subject}</span></li>`)
     .join("");
@@ -177,18 +184,26 @@ function saveTimetables() {
   localStorage.setItem("atlas-timetables", JSON.stringify(timetables));
 }
 
+function saveDateTimetables() {
+  localStorage.setItem("atlas-date-timetables", JSON.stringify(dateTimetables));
+}
+
 function openTimetableEditor() {
   const grade = gradeSelect.value;
   const klass = classSelect.value;
   const key = `${grade}-${klass}`;
+  const selectedDateKey = toKey(selectedDate);
 
   // default weekday is the currently selected date's weekday
   const defaultWeekday = selectedDate.getDay();
+  const currentDateTimetableKey = `${selectedDateKey}-${key}`;
 
-  // get current subjects for that weekday (or default)
-  const currentWeekSubjects = (timetables[key] && timetables[key][defaultWeekday])
-    ? timetables[key][defaultWeekday].slice()
-    : defaultSubjectsByGrade[grade].slice();
+  // Prefer an existing one-day override when opening the editor.
+  const currentWeekSubjects = dateTimetables[currentDateTimetableKey]
+    ? dateTimetables[currentDateTimetableKey].slice()
+    : (timetables[key] && timetables[key][defaultWeekday])
+      ? timetables[key][defaultWeekday].slice()
+      : defaultSubjectsByGrade[grade].slice();
 
   // build editor UI inside timetableList
   timetableList.innerHTML = "";
@@ -202,7 +217,7 @@ function openTimetableEditor() {
   weekdayWrap.style.display = "flex";
   weekdayWrap.style.gap = "8px";
   weekdayWrap.style.alignItems = "center";
-  weekdayWrap.innerHTML = `<label style=\"font-weight:800;color:#647083;\">요일:</label>`;
+  weekdayWrap.innerHTML = `<label style="font-weight:800;color:#647083;">요일:</label>`;
   const weekdaySelect = document.createElement("select");
   const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
   for (let d = 0; d <= 6; d += 1) {
@@ -237,13 +252,29 @@ function openTimetableEditor() {
   topRow.appendChild(applyAllWrap);
   editorForm.appendChild(topRow);
 
+  // optional one-day override for the selected calendar date
+  const oneDayWrap = document.createElement("label");
+  oneDayWrap.style.display = "inline-flex";
+  oneDayWrap.style.alignItems = "center";
+  oneDayWrap.style.gap = "8px";
+  const oneDayCheckbox = document.createElement("input");
+  oneDayCheckbox.type = "checkbox";
+  oneDayCheckbox.checked = Boolean(dateTimetables[currentDateTimetableKey]);
+  oneDayWrap.appendChild(oneDayCheckbox);
+  const oneDayText = document.createElement("span");
+  oneDayText.textContent = `${selectedDateKey} 하루만 적용`;
+  oneDayText.style.color = "#647083";
+  oneDayText.style.fontWeight = "800";
+  oneDayWrap.appendChild(oneDayText);
+  editorForm.appendChild(oneDayWrap);
+
   // scope select (this class / same grade all classes / all classes)
   const scopeWrap = document.createElement("div");
   scopeWrap.style.display = "flex";
   scopeWrap.style.gap = "8px";
   scopeWrap.style.alignItems = "center";
   scopeWrap.innerHTML = `
-    <label style=\"font-weight:800;color:#647083;\">적용 범위:</label>
+    <label style="font-weight:800;color:#647083;">적용 범위:</label>
   `;
   const scopeSelect = document.createElement("select");
   scopeSelect.innerHTML = `
@@ -282,6 +313,31 @@ function openTimetableEditor() {
   buildPeriodInputs(currentWeekSubjects);
   editorForm.appendChild(periodContainer);
 
+  function updateEditorMode() {
+    weekdaySelect.disabled = oneDayCheckbox.checked;
+    applyAllCheckbox.disabled = oneDayCheckbox.checked;
+  }
+
+  oneDayCheckbox.addEventListener("change", () => {
+    if (oneDayCheckbox.checked) {
+      const subjects = dateTimetables[currentDateTimetableKey]
+        ? dateTimetables[currentDateTimetableKey].slice()
+        : (timetables[key] && timetables[key][defaultWeekday])
+          ? timetables[key][defaultWeekday].slice()
+          : defaultSubjectsByGrade[grade].slice();
+      buildPeriodInputs(subjects);
+    } else {
+      const weekday = Number(weekdaySelect.value);
+      const subjects = (timetables[key] && timetables[key][weekday])
+        ? timetables[key][weekday].slice()
+        : defaultSubjectsByGrade[grade].slice();
+      buildPeriodInputs(subjects);
+    }
+    updateEditorMode();
+  });
+
+  updateEditorMode();
+
   // action buttons
   const actions = document.createElement("div");
   actions.style.display = "flex";
@@ -317,11 +373,15 @@ function openTimetableEditor() {
     const inputs = periodContainer.querySelectorAll('input[data-period]');
     const newSubjects = Array.from(inputs).map((inp) => (inp.value || "").trim());
     const scope = scopeSelect.value;
-    const applyAll = applyAllCheckbox.checked;
+    const applyAll = applyAllCheckbox.checked && !oneDayCheckbox.checked;
     const chosenWeekday = Number(weekdaySelect.value);
 
     function applyToKey(g, c) {
       const target = `${g}-${c}`;
+      if (oneDayCheckbox.checked) {
+        dateTimetables[`${selectedDateKey}-${target}`] = newSubjects.slice();
+        return;
+      }
       if (!timetables[target]) timetables[target] = {};
       if (applyAll) {
         for (let d = 0; d <= 6; d += 1) {
@@ -335,16 +395,17 @@ function openTimetableEditor() {
     if (scope === "this") {
       applyToKey(grade, klass);
     } else if (scope === "grade") {
-      const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
+      const classOptions = Array.from(classSelect.querySelectorAll("option")).map((o) => o.value);
       classOptions.forEach((c) => applyToKey(grade, c));
     } else if (scope === "all") {
-      const classOptions = Array.from(classSelect.querySelectorAll('option')).map((o) => o.value);
+      const classOptions = Array.from(classSelect.querySelectorAll("option")).map((o) => o.value);
       for (let g = 1; g <= 3; g += 1) {
         classOptions.forEach((c) => applyToKey(g, c));
       }
     }
 
     saveTimetables();
+    saveDateTimetables();
     renderDetails();
   });
 }
